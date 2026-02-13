@@ -79,9 +79,10 @@ type SenderNameResult = {
 async function resolveFeishuSenderName(params: {
   account: ResolvedFeishuAccount;
   senderOpenId: string;
+  chatId?: string;
   log: (...args: any[]) => void;
 }): Promise<SenderNameResult> {
-  const { account, senderOpenId, log } = params;
+  const { account, senderOpenId, chatId, log } = params;
   if (!account.configured) return {};
   if (!senderOpenId) return {};
 
@@ -89,9 +90,9 @@ async function resolveFeishuSenderName(params: {
   const now = Date.now();
   if (cached && cached.expireAt > now) return { name: cached.name };
 
-  try {
-    const client = createFeishuClient(account);
+  const client = createFeishuClient(account);
 
+  try {
     // contact/v3/users/:user_id?user_id_type=open_id
     const res: any = await client.contact.user.get({
       path: { user_id: senderOpenId },
@@ -108,8 +109,6 @@ async function resolveFeishuSenderName(params: {
       senderNameCache.set(senderOpenId, { name, expireAt: now + SENDER_NAME_TTL_MS });
       return { name };
     }
-
-    return {};
   } catch (err) {
     // Check if this is a permission error
     const permErr = extractPermissionError(err);
@@ -118,10 +117,41 @@ async function resolveFeishuSenderName(params: {
       return { permissionError: permErr };
     }
 
+    // Fallback: Try Chat Member API if contact API failed (e.g. 41050 data scope error)
+    // This API often has looser scope requirements than contact.user.get
+    if (chatId) {
+      try {
+        // Fallback: use raw request to LIST members, then find the user.
+        // This avoids 404 on direct member access if that endpoint doesn't exist.
+        // GET /open-apis/im/v1/chats/:chat_id/members?member_id_type=open_id
+        const res = await client.request({
+          method: "GET",
+          url: `/open-apis/im/v1/chats/${chatId}/members`,
+          params: { member_id_type: "open_id", page_size: 20 },
+        });
+
+        // Response format: { code: 0, data: { items: [{ member_id, name, ... }] } }
+        const items = res?.data?.items;
+        if (Array.isArray(items)) {
+          const member = items.find((m: any) => m.member_id === senderOpenId);
+          if (member && member.name) {
+            senderNameCache.set(senderOpenId, {
+              name: member.name,
+              expireAt: now + SENDER_NAME_TTL_MS,
+            });
+            return { name: member.name };
+          }
+        }
+      } catch (fallbackErr) {
+        log(`feishu: fallback chat member lookup failed: ${String(fallbackErr)}`);
+      }
+    }
+
     // Best-effort. Don't fail message handling if name lookup fails.
     log(`feishu: failed to resolve sender name for ${senderOpenId}: ${String(err)}`);
     return {};
   }
+  return {};
 }
 
 export type FeishuMessageEvent = {
@@ -520,6 +550,7 @@ export async function handleFeishuMessage(params: {
   const senderResult = await resolveFeishuSenderName({
     account,
     senderOpenId: ctx.senderOpenId,
+    chatId: ctx.chatId,
     log,
   });
   if (senderResult.name) ctx = { ...ctx, senderName: senderResult.name };
