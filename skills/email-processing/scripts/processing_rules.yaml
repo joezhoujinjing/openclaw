@@ -63,6 +63,122 @@ auto_archive_domains:
   - redfin.com
   - vercel.com
   - github.com
+  - em1.turbotax.intuit.com
+  - email.westfield.com
+  - emcom.bankofamerica.com
+  - itr.mail.codecademy.com
+  - lifetouch.com
+  - veo.co
+  - grafana.com
+  - glassdoor.com
+  - welcome.americanexpress.com
+  - member.americanexpress.com
+  - no_reply@mcmap.chase.com
+  - email.sutterhealth.org # Appointment reminders are usually "calendar" or "notification"
+  - h5.hilton.com
+  - email.chipotle.com
+  - mirazur.fr
+  - grandevault.com # Healthcare.com
+  - soniox.com
+  - hotspotservice@telekom.de # Wifi receipts
+  - united.com # More United domains
+  - opentable.com
+  - resy.com
+  - toasttab.com
+  - vegamour.com
+  - marketing.base44.com
+  - emails.bayclubs.com
+  - updates.ubisoft.com
+  - newsletter.2k.com
+  - marketing.id.me
+  - reply.etsy.com
+  - e.lucidmotors.com
+  - news.paypal.com # PayPal marketing (keep service@paypal.com)
+  - yfmail.net # 扬帆云 (verification codes, usually ephemeral)
+  - usbank.com # Marketing/general updates (keep alerts)
+  - newsletter.trip.com
+  - m.wynnlasvegas.com
+  - marketing.unsplash.com
+  - news.davidoffgeneva.com
+  - newsletter.cruisedirect.com
+  - edm.kkday.com
+  - email.legalzoom.com
+  - mail.coinbase.com
+  - hello.chamberlain.com # myQ marketing
+  - insights.omdia.com
+  - about.nationalgeographic.com
+  - skyrocketventures.com # Recruiters (optional: move to 'review' if actively looking)
+  - hirefrederick.com # 85Fun Dance Studio
+  - mail.hallow.com
+  - mail.musescore.com
+  - info.mail.amadeus.com
+  - email.tripit.com # Monthly/Weekly digests (keep alerts)
+  - email.nespresso.com
+  - email.bose.com
+  - e.affirm.com
+  - messaging.us.hsbc.com
+  - mail.grammarly.com
+  - email.rei.com
+  - travel.hiltongrandvacations.com
+  - reenrollments@harker.org # Harker enrollment reminders (often duplicates) - BE CAREFUL, moving to explicit rules if needed
+  - lindy.ai
+  - msmail.morganstanley.com
+  - e.godaddy.com
+  - ant.wilson@supabase.com
+  - info@thetravelinstitute.com
+  - hi@m.hidrb.com # Dr. B Newsletter
+  - ha.ucla.edu
+  - announcements@e.techsoup.org
+  - noreply@wise.com # Policy updates
+  - camp@frostscience.org
+  - sales@e.lucidmotors.com
+  - marketing@unsplash.com
+  - kipp@skyrocketventures.com
+  - googleplay-noreply@google.com
+  - deals.vegas.com
+  - uber.com # Marketing/promos
+  - m.wynnlasvegas.com
+  - notifications.usbank.com
+  - about.nationalgeographic.com
+  - insights.omdia.com
+  - hello.chamberlain.com
+  - team.twilio.com
+  - noreply@yfmail.net
+  - edm.kkday.com
+  - hotels.com
+  - venmo.com
+  - mcmap.chase.com # Chase offers
+  - unsplash.com
+  - googleplay-noreply@google.com
+  - deals.vegas.com
+  - team.twilio.com
+  - thetravelinstitute.com
+  - m.hidrb.com
+  - ha.ucla.edu
+  - e.techsoup.org
+  - wise.com
+  - camp@frostscience.org
+  - supabase.com
+  - lindy.ai
+  - godaddy.com
+  - msmail.morganstanley.com
+  - aws-marketing-email-replies@amazon.com
+  - namecheap.com
+  - news.cam.ac.uk
+  - bluebottlecoffee.com
+  - wedgwood.com
+  - marriott-vacations.com
+  - golffacility.com
+  - wix.com
+  - adobe.com
+  - influencity.com
+  - educative.io
+  - kaggle.com
+  - poker.org # If relevant
+  - teamsnap.com
+  - evite.com
+  - pokemon.com
+  - nianticlabs.com
 
 auto_archive_keywords:
   - "order confirmation"
