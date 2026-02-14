@@ -20,6 +20,9 @@ export type AnnounceQueueItem = {
   sessionKey: string;
   origin?: DeliveryContext;
   originKey?: string;
+  /** Child session key/id for traceability in transcript (subagent runs). */
+  childSessionKey?: string;
+  childSessionId?: string;
 };
 
 export type AnnounceQueueSettings = {

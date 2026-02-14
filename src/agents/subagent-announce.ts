@@ -113,25 +113,71 @@ function resolveAnnounceOrigin(
   return mergeDeliveryContext(requesterOrigin, deliveryContextFromSession(entry));
 }
 
+function appendChildSessionTrace(message: string, item: AnnounceQueueItem): string {
+  const id = item.childSessionId?.trim();
+  const key = item.childSessionKey?.trim();
+  if (!id && !key) {
+    return message;
+  }
+  const parts: string[] = [];
+  if (id) {
+    parts.push(`sessionId ${id}`);
+  }
+  if (key) {
+    parts.push(`sessionKey ${key}`);
+  }
+  return `${message}\n\n— ${parts.join(" \u2022 ")}`;
+}
+
 async function sendAnnounce(item: AnnounceQueueItem) {
+  const baseText = item.prompt.trim();
+  if (!baseText) {
+    return;
+  }
+  const text = appendChildSessionTrace(baseText, item);
   const origin = item.origin;
-  const threadId =
-    origin?.threadId != null && origin.threadId !== "" ? String(origin.threadId) : undefined;
-  await callGateway({
-    method: "agent",
-    params: {
-      sessionKey: item.sessionKey,
-      message: item.prompt,
-      channel: origin?.channel,
-      accountId: origin?.accountId,
-      to: origin?.to,
-      threadId,
-      deliver: true,
-      idempotencyKey: crypto.randomUUID(),
-    },
-    expectFinal: true,
-    timeoutMs: 60_000,
-  });
+  let sentToChannel = false;
+  if (origin?.channel && origin?.to) {
+    try {
+      await callGateway({
+        method: "send",
+        params: {
+          to: origin.to,
+          message: text,
+          channel: origin.channel,
+          accountId: origin.accountId,
+          sessionKey: item.sessionKey,
+          idempotencyKey: crypto.randomUUID(),
+        },
+        timeoutMs: 60_000,
+      });
+      sentToChannel = true;
+    } catch (err) {
+      defaultRuntime.error?.(
+        `subagent announce: send to ${origin.channel} failed, falling back to transcript: ${String(err)}`,
+      );
+    }
+  }
+  // Inject into the session transcript so the Control UI and history show the result.
+  // Skip when we already sent to a channel: gateway send() with sessionKey mirrors to the
+  // transcript, so inject would duplicate the message (e.g. CLI showing it twice).
+  if (!sentToChannel) {
+    try {
+      await callGateway({
+        method: "chat.inject",
+        params: {
+          sessionKey: item.sessionKey,
+          message: text,
+        },
+        timeoutMs: 60_000,
+      });
+    } catch (err) {
+      defaultRuntime.error?.(
+        `subagent announce: chat.inject failed for ${item.sessionKey}: ${String(err)}`,
+      );
+      throw err;
+    }
+  }
 }
 
 function resolveRequesterStoreKey(
@@ -171,6 +217,8 @@ async function maybeQueueSubagentAnnounce(params: {
   triggerMessage: string;
   summaryLine?: string;
   requesterOrigin?: DeliveryContext;
+  childSessionKey?: string;
+  childSessionId?: string;
 }): Promise<"steered" | "queued" | "none"> {
   const { cfg, entry } = loadRequesterSessionEntry(params.requesterSessionKey);
   const canonicalKey = resolveRequesterStoreKey(cfg, params.requesterSessionKey);
@@ -209,6 +257,8 @@ async function maybeQueueSubagentAnnounce(params: {
         enqueuedAt: Date.now(),
         sessionKey: canonicalKey,
         origin,
+        childSessionKey: params.childSessionKey,
+        childSessionId: params.childSessionId,
       },
       settings: queueSettings,
       send: sendAnnounce,
@@ -374,6 +424,27 @@ export type SubagentRunOutcome = {
 
 export type SubagentAnnounceType = "subagent task" | "cron job";
 
+function buildUserFacingAnnouncement(params: {
+  taskLabel: string;
+  reply?: string;
+  outcome: SubagentRunOutcome;
+}): string | undefined {
+  const reply = params.reply?.trim();
+  if (reply && /^NO_REPLY$/i.test(reply)) {
+    return undefined;
+  }
+  if (reply) {
+    return reply;
+  }
+  if (params.outcome.status === "timeout") {
+    return `The task "${params.taskLabel}" timed out before returning a result.`;
+  }
+  if (params.outcome.status === "error") {
+    return `The task "${params.taskLabel}" failed${params.outcome.error ? `: ${params.outcome.error}` : "."}`;
+  }
+  return `The task "${params.taskLabel}" finished, but no user-facing output was returned.`;
+}
+
 export async function runSubagentAnnounceFlow(params: {
   childSessionKey: string;
   childRunId: string;
@@ -476,44 +547,24 @@ export async function runSubagentAnnounceFlow(params: {
       outcome = { status: "unknown" };
     }
 
-    // Build stats
-    const statsLine = await buildSubagentStatsLine({
-      sessionKey: params.childSessionKey,
-      startedAt: params.startedAt,
-      endedAt: params.endedAt,
-    });
-
-    // Build status label
-    const statusLabel =
-      outcome.status === "ok"
-        ? "completed successfully"
-        : outcome.status === "timeout"
-          ? "timed out"
-          : outcome.status === "error"
-            ? `failed: ${outcome.error || "unknown error"}`
-            : "finished with unknown status";
-
-    // Build instructional message for main agent
-    const announceType = params.announceType ?? "subagent task";
     const taskLabel = params.label || params.task || "task";
-    const triggerMessage = [
-      `A ${announceType} "${taskLabel}" just ${statusLabel}.`,
-      "",
-      "Findings:",
-      reply || "(no output)",
-      "",
-      statsLine,
-      "",
-      "Summarize this naturally for the user. Keep it brief (1-2 sentences). Flow it into the conversation naturally.",
-      `Do not mention technical details like tokens, stats, or that this was a ${announceType}.`,
-      "You can respond with NO_REPLY if no announcement is needed (e.g., internal task with no user-facing result).",
-    ].join("\n");
+    const announcementText = buildUserFacingAnnouncement({
+      taskLabel,
+      reply,
+      outcome,
+    });
+    if (!announcementText) {
+      didAnnounce = true;
+      return true;
+    }
 
     const queued = await maybeQueueSubagentAnnounce({
       requesterSessionKey: params.requesterSessionKey,
-      triggerMessage,
+      triggerMessage: announcementText,
       summaryLine: taskLabel,
       requesterOrigin,
+      childSessionKey: params.childSessionKey,
+      childSessionId,
     });
     if (queued === "steered") {
       didAnnounce = true;
@@ -524,29 +575,20 @@ export async function runSubagentAnnounceFlow(params: {
       return true;
     }
 
-    // Send to main agent - it will respond in its own voice
+    // Deliver directly as assistant output (no synthetic user turn).
     let directOrigin = requesterOrigin;
     if (!directOrigin) {
       const { entry } = loadRequesterSessionEntry(params.requesterSessionKey);
       directOrigin = deliveryContextFromSession(entry);
     }
-    await callGateway({
-      method: "agent",
-      params: {
-        sessionKey: params.requesterSessionKey,
-        message: triggerMessage,
-        deliver: true,
-        channel: directOrigin?.channel,
-        accountId: directOrigin?.accountId,
-        to: directOrigin?.to,
-        threadId:
-          directOrigin?.threadId != null && directOrigin.threadId !== ""
-            ? String(directOrigin.threadId)
-            : undefined,
-        idempotencyKey: crypto.randomUUID(),
-      },
-      expectFinal: true,
-      timeoutMs: 60_000,
+    await sendAnnounce({
+      prompt: announcementText,
+      summaryLine: taskLabel,
+      enqueuedAt: Date.now(),
+      sessionKey: params.requesterSessionKey,
+      origin: directOrigin,
+      childSessionKey: params.childSessionKey,
+      childSessionId,
     });
 
     didAnnounce = true;
